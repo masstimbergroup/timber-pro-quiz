@@ -109,12 +109,12 @@ export default function QuestionCard({ question, options, onSelect, variant = "b
           ))}
         </div>
       ) : (
-        <div className="flex flex-row gap-5 items-center justify-center">
+        <div className="flex flex-col sm:flex-row gap-4 items-center justify-center">
           {options.map((option) => (
             <button
               key={option}
               onClick={() => onSelect(option)}
-              className="btn-ghost flex-1 max-w-[250px] px-6 py-4 text-lg font-semibold transition-all duration-200 cursor-pointer border"
+              className="btn-ghost w-full sm:flex-1 sm:max-w-[250px] px-6 py-4 text-lg font-semibold transition-all duration-200 cursor-pointer border"
               style={{
                 background: "transparent",
                 borderColor: "var(--color-stroke)",
