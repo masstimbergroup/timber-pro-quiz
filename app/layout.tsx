@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Poppins } from "next/font/google";
+import { Poppins, Caveat } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
 
@@ -10,6 +10,12 @@ const scandia = localFont({
     { path: "../public/fonts/ScandiaWebBold.woff2", weight: "700", style: "normal" },
   ],
   variable: "--font-scandia",
+});
+
+const caveat = Caveat({
+  variable: "--font-caveat",
+  subsets: ["latin"],
+  weight: ["700"],
 });
 
 const poppins = Poppins({
@@ -29,7 +35,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${scandia.variable} ${poppins.variable} h-full antialiased`}>
+    <html lang="en" className={`${scandia.variable} ${poppins.variable} ${caveat.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );

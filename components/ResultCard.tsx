@@ -65,8 +65,8 @@ export default function ResultCard({ result, products, onRestart }: ResultCardPr
   return (
     <div className="w-full max-w-3xl mx-auto">
       <p
-        className="text-center text-lg italic mb-1"
-        style={{ color: "var(--color-btn-yes)" }}
+        className="text-center mt-6 mb-1"
+        style={{ color: "var(--color-btn-yes)", fontFamily: "var(--font-caveat)", fontWeight: 700, fontSize: "26px", lineHeight: "100%" }}
       >
         Your results
       </p>

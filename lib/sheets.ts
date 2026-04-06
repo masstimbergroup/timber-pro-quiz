@@ -141,7 +141,11 @@ function csvToSheetRows(csv: string): SheetRow[] {
   const headers = parsed[0];
   const dataRows = parsed.slice(1).filter((r) => r.some((cell) => cell !== ""));
 
-  const resultStartIndex = headers.length - 3;
+  const mainIdx = headers.findIndex((h) => h.toLowerCase().includes("main product"));
+  const preIdx = headers.findIndex((h) => h.toLowerCase().includes("pre-treatment"));
+  const postIdx = headers.findIndex((h) => h.toLowerCase().includes("post-treatment"));
+
+  const resultStartIndex = mainIdx !== -1 ? mainIdx : headers.length - 3;
   const questionHeaders = headers.slice(0, resultStartIndex);
 
   return dataRows.map((row) => {
@@ -151,9 +155,9 @@ function csvToSheetRows(csv: string): SheetRow[] {
     });
     return {
       questions,
-      mainProduct: row[resultStartIndex] || "",
-      preTreatment: row[resultStartIndex + 1] || "",
-      postTreatment: row[resultStartIndex + 2] || "",
+      mainProduct: mainIdx !== -1 ? row[mainIdx] || "" : "",
+      preTreatment: preIdx !== -1 ? row[preIdx] || "" : "",
+      postTreatment: postIdx !== -1 ? row[postIdx] || "" : "",
     };
   });
 }
