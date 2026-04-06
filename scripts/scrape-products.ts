@@ -59,13 +59,23 @@ async function scrapeProduct(url: string): Promise<{ name: string; description: 
       }
     }
 
-    // 3. Product image: find img with cdn.prod.website-files.com that uses class="image-fit"
-    //    and is NOT an SVG (the logo is SVG). Product photos are jpg/jpeg/png/webp.
-    const imageMatches = html.matchAll(/<img[^>]*src="(https:\/\/cdn\.prod\.website-files\.com\/[^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"[^>]*class="[^"]*image-fit[^"]*"[^>]*>/g);
+    // 3. Product image: prefer the product render/bucket image (contains "Render" in filename)
+    //    over the hero/lifestyle image. Render images are PNGs of the actual product container.
     let image = "";
-    for (const im of imageMatches) {
-      image = im[1];
-      break;
+
+    // First: look for product render image (bucket with label)
+    const renderMatch = html.match(/src="(https:\/\/cdn\.prod\.website-files\.com\/6883fdbb5812fc399ce753da\/[^"]*Render[^"]*\.(?:png|webp)[^"]*)"/i);
+    if (renderMatch) {
+      image = renderMatch[1];
+    }
+
+    // Fallback: image-fit class (hero/lifestyle image)
+    if (!image) {
+      const imageMatches = html.matchAll(/<img[^>]*src="(https:\/\/cdn\.prod\.website-files\.com\/[^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"[^>]*class="[^"]*image-fit[^"]*"[^>]*>/g);
+      for (const im of imageMatches) {
+        image = im[1];
+        break;
+      }
     }
     // Also try reverse attribute order (class before src)
     if (!image) {

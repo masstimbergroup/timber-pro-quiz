@@ -10,12 +10,9 @@ export default function QuizHeader() {
       }}
     >
       <div className="max-w-5xl mx-auto text-center">
-        <span className="text-xl font-bold tracking-widest uppercase" style={{ color: "var(--color-text)" }}>
-          TIMBERPRO
-        </span>
-        <span className="text-xl ml-2 italic" style={{ color: "var(--color-btn-yes)" }}>
-          Quiz
-        </span>
+        <a href="/" className="inline-block">
+          <img src="/images/logo.svg" alt="TimberPro Quiz" className="h-8 cursor-pointer" />
+        </a>
       </div>
     </header>
   );

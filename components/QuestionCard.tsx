@@ -28,11 +28,20 @@ export default function QuestionCard({ question, options, onSelect, variant = "b
           border-color: var(--color-btn-yes) !important;
         }
         .btn-grid:hover {
+          background: var(--color-btn-yes) !important;
           border-color: var(--color-btn-yes) !important;
+          color: #FFFFFF !important;
+        }
+        .btn-grid:hover span {
+          color: #FFFFFF !important;
         }
         .image-card:hover {
           border-color: var(--color-btn-yes) !important;
           transform: translateY(-2px);
+          background: var(--color-btn-yes) !important;
+        }
+        .image-card:hover .card-label {
+          color: #FFFFFF !important;
         }
       `}</style>
 
@@ -78,7 +87,7 @@ export default function QuestionCard({ question, options, onSelect, variant = "b
                   )}
                 </div>
                 <div className="px-4 py-3">
-                  <span className="text-sm" style={{ color: "var(--color-text)" }}>
+                  <span className="card-label text-sm" style={{ color: "var(--color-text)" }}>
                     {capitalizeFirst(option)}
                   </span>
                 </div>
@@ -114,7 +123,7 @@ export default function QuestionCard({ question, options, onSelect, variant = "b
             <button
               key={option}
               onClick={() => onSelect(option)}
-              className="btn-ghost w-full sm:flex-1 sm:max-w-[250px] px-6 py-4 text-lg font-semibold transition-all duration-200 cursor-pointer border"
+              className="btn-ghost w-full sm:w-[220px] px-6 py-5 text-lg font-semibold transition-all duration-200 cursor-pointer border"
               style={{
                 background: "transparent",
                 borderColor: "var(--color-stroke)",

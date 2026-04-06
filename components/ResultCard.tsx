@@ -101,10 +101,10 @@ export default function ResultCard({ result, products, onRestart }: ResultCardPr
                 {i + 1}
               </span>
               <div>
-                <h3 className="text-lg font-bold" style={{ color: "var(--color-text)" }}>
+                <h3 style={{ color: "var(--color-text)", fontSize: "28px", fontWeight: 500, lineHeight: "100%", letterSpacing: "-0.04em" }}>
                   {step.label}
                 </h3>
-                <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+                <p style={{ color: "var(--color-text-muted)", fontSize: "12px", fontWeight: 400, lineHeight: "150%", letterSpacing: "0", fontFamily: "var(--font-poppins), Poppins, sans-serif" }}>
                   {step.subtitle}
                 </p>
               </div>
@@ -122,7 +122,7 @@ export default function ResultCard({ result, products, onRestart }: ResultCardPr
         ))}
       </div>
 
-      <div className="mt-10 text-center">
+      <div className="mt-10 mb-12 text-center">
         <button
           onClick={onRestart}
           className="px-8 py-3 rounded-lg font-semibold transition-all duration-200 cursor-pointer"

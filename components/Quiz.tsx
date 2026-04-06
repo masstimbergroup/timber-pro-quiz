@@ -143,73 +143,67 @@ export default function Quiz() {
     setSelections(currentSelections);
   }, [sheetData]);
 
-  const addSelection = useCallback((answer: string, options: string[]) => {
-    setSelections((prev) => {
-      const next = [...prev, { answer, options }];
-      updateURL(next);
-      return next;
-    });
-  }, []);
+  // Sync URL whenever selections change
+  useEffect(() => {
+    updateURL(selections);
+  }, [selections]);
 
-  const pushState = useCallback((newState: QuizState) => {
-    setState((prev) => {
-      setHistory((h) => [...h, prev]);
-      return newState;
-    });
+  // Refs to read current state/history without nesting setState calls
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const historyRef = useRef(history);
+  historyRef.current = history;
+
+  const addSelection = useCallback((answer: string, options: string[]) => {
+    setSelections((prev) => [...prev, { answer, options }]);
   }, []);
 
   const goBack = useCallback(() => {
-    setHistory((prev) => {
-      if (prev.length === 0) return prev;
-      const newHistory = [...prev];
-      const previous = newHistory.pop()!;
-      setState(previous);
-      return newHistory;
-    });
-    setSelections((prev) => {
-      const next = prev.slice(0, -1);
-      updateURL(next);
-      return next;
-    });
+    const prev = historyRef.current;
+    if (prev.length === 0) return;
+    setState(prev[prev.length - 1]);
+    setHistory(prev.slice(0, -1));
+    setSelections((s) => s.slice(0, -1));
   }, []);
 
   const restart = useCallback(() => {
     setState({ phase: "top-level" });
     setHistory([]);
     setSelections([]);
-    updateURL([]);
   }, []);
 
   const handleTopLevel = useCallback((answer: string) => {
     const options = ["Interior Project", "Exterior Project"];
     addSelection(answer, options);
+    setHistory((h) => [...h, stateRef.current]);
     if (answer === "Interior Project") {
-      pushState({ phase: "questions", categoryKey: "interior", answers: {}, currentQuestionIndex: 0 });
+      setState({ phase: "questions", categoryKey: "interior", answers: {}, currentQuestionIndex: 0 });
     } else {
-      pushState({ phase: "sub-category" });
+      setState({ phase: "sub-category" });
     }
-  }, [pushState, addSelection]);
+  }, [addSelection]);
 
   const handleSubCategory = useCallback((categoryKey: string, label: string) => {
     const options = EXTERIOR_CATEGORIES.map((c) => c.label);
     addSelection(label, options);
-    pushState({ phase: "questions", categoryKey, answers: {}, currentQuestionIndex: 0 });
-  }, [pushState, addSelection]);
+    setHistory((h) => [...h, stateRef.current]);
+    setState({ phase: "questions", categoryKey, answers: {}, currentQuestionIndex: 0 });
+  }, [addSelection]);
 
   const handleAnswer = useCallback((question: string, answer: string, options: string[]) => {
     if (!sheetData) return;
     addSelection(answer, options);
-    setState((prev) => {
-      if (prev.phase !== "questions") return prev;
-      const newAnswers = { ...prev.answers, [question]: answer };
-      const categoryData = sheetData[prev.categoryKey];
-      const nextStep = getNextStep(prev.categoryKey, categoryData, newAnswers);
-      setHistory((h) => [...h, prev]);
-      if (nextStep.type === "result") {
-        return { phase: "result" as const, result: nextStep.result };
-      }
-      return { ...prev, answers: newAnswers, currentQuestionIndex: prev.currentQuestionIndex + 1 };
-    });
+    const prev = stateRef.current;
+    if (prev.phase !== "questions") return;
+    const newAnswers = { ...prev.answers, [question]: answer };
+    const categoryData = sheetData[prev.categoryKey];
+    const nextStep = getNextStep(prev.categoryKey, categoryData, newAnswers);
+    setHistory((h) => [...h, prev]);
+    if (nextStep.type === "result") {
+      setState({ phase: "result" as const, result: nextStep.result });
+    } else {
+      setState({ ...prev, answers: newAnswers, currentQuestionIndex: prev.currentQuestionIndex + 1 });
+    }
   }, [sheetData, addSelection]);
 
   if (loading) {
@@ -246,15 +240,18 @@ export default function Quiz() {
   }
 
   return (
-    <div className="w-full">
+    <div className="w-full min-h-screen flex flex-col relative">
       <QuizHeader />
-      <div className="max-w-3xl mx-auto px-4 py-20">
-
-        {history.length > 0 && state.phase !== "result" && (
-          <button onClick={goBack} className="mb-6 text-sm cursor-pointer" style={{ color: "var(--color-text-muted)" }}>
-            &larr; Back
-          </button>
-        )}
+      {history.length > 0 && state.phase !== "result" && (
+        <button
+          onClick={goBack}
+          className="absolute left-6 top-20 text-sm cursor-pointer z-10"
+          style={{ color: "var(--color-text-muted)" }}
+        >
+          &larr; Back
+        </button>
+      )}
+      <div className="max-w-3xl mx-auto px-4 flex-1 flex flex-col justify-center">
 
         {state.phase === "top-level" && (
           <QuestionCard

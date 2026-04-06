@@ -1,10 +1,21 @@
 import type { Metadata } from "next";
-import { Geist } from "next/font/google";
+import { Poppins } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const scandia = localFont({
+  src: [
+    { path: "../public/fonts/ScandiaWebLight.woff2", weight: "300", style: "normal" },
+    { path: "../public/fonts/ScandiaWebMedium.woff2", weight: "500", style: "normal" },
+    { path: "../public/fonts/ScandiaWebBold.woff2", weight: "700", style: "normal" },
+  ],
+  variable: "--font-scandia",
+});
+
+const poppins = Poppins({
+  variable: "--font-poppins",
   subsets: ["latin"],
+  weight: ["400", "500"],
 });
 
 export const metadata: Metadata = {
@@ -18,7 +29,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${geistSans.variable} h-full antialiased`}>
+    <html lang="en" className={`${scandia.variable} ${poppins.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );
