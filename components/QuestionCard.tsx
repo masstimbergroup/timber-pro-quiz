@@ -49,7 +49,7 @@ export default function QuestionCard({ question, options, onSelect, variant = "b
         className={`${variant === "buttons" ? "text-4xl font-bold" : "text-2xl font-bold"} mb-10 text-center`}
         style={{ color: "var(--color-text-heading)" }}
       >
-        {question}
+        {question || "What's your main goal?"}
       </h2>
 
       {variant === "image-cards" ? (
@@ -118,12 +118,12 @@ export default function QuestionCard({ question, options, onSelect, variant = "b
           ))}
         </div>
       ) : (
-        <div className="flex flex-col sm:flex-row gap-4 items-center justify-center">
+        <div className="grid gap-4 items-stretch justify-center" style={{ gridTemplateColumns: `repeat(${Math.min(options.length, 3)}, minmax(0, 220px))` }}>
           {options.map((option) => (
             <button
               key={option}
               onClick={() => onSelect(option)}
-              className="btn-ghost w-full sm:w-[220px] px-6 py-5 text-lg font-semibold transition-all duration-200 cursor-pointer border"
+              className="btn-ghost px-6 py-5 text-lg font-semibold transition-all duration-200 cursor-pointer border flex items-center justify-center text-center"
               style={{
                 background: "transparent",
                 borderColor: "var(--color-stroke)",

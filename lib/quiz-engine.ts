@@ -4,6 +4,25 @@ import { CATEGORIES } from "./sheets";
 
 const SKIP_VALUES = ["(SKIP)", "(Skip)", "(skip)"];
 
+// Split on commas but ignore commas inside parentheses
+function splitOptions(val: string): string[] {
+  const parts: string[] = [];
+  let current = "";
+  let depth = 0;
+  for (const ch of val) {
+    if (ch === "(") depth++;
+    else if (ch === ")") depth--;
+    if (ch === "," && depth === 0) {
+      parts.push(current.trim());
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+  if (current.trim()) parts.push(current.trim());
+  return parts.filter(Boolean);
+}
+
 export function getCategory(key: string) {
   return CATEGORIES.find((c) => c.key === key);
 }
@@ -22,7 +41,7 @@ export function getNextStep(
       const cellValue = row.questions[question] || "";
       if (cellValue === answer || cellValue === "ANY") return true;
       // Check if the answer is one of the comma-separated values in the cell
-      const parts = cellValue.split(",").map((p) => p.trim());
+      const parts = splitOptions(cellValue);
       return parts.includes(answer);
     });
   }
@@ -43,8 +62,7 @@ export function getNextStep(
     for (const row of matchingRows) {
       const val = row.questions[questionCol] || "";
       if (!SKIP_VALUES.includes(val) && val !== "" && val !== "ANY") {
-        // Split comma-separated values into individual options
-        const parts = val.split(",").map((p) => p.trim()).filter(Boolean);
+        const parts = splitOptions(val);
         for (const part of parts) {
           optionsSet.add(part);
         }
@@ -60,7 +78,7 @@ export function getNextStep(
       matchingRows = matchingRows.filter((row) => {
         const cellValue = row.questions[questionCol] || "";
         // Match if the cell contains the auto-selected value (could be part of comma-separated)
-        return cellValue === "ANY" || cellValue.split(",").map((p) => p.trim()).includes(options[0]);
+        return cellValue === "ANY" || splitOptions(cellValue).includes(options[0]);
       });
       continue;
     }

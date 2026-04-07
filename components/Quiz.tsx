@@ -7,6 +7,7 @@ import { SheetRow, QuizState, ProductInfo } from "@/lib/types";
 import QuizHeader from "./QuizHeader";
 import QuestionCard from "./QuestionCard";
 import ResultCard from "./ResultCard";
+import DebugPanel from "./DebugPanel";
 
 // Find the shortest prefix of `selected` that uniquely identifies it among `options`
 function shortPrefix(selected: string, options: string[]): string {
@@ -57,12 +58,16 @@ export default function Quiz() {
   const [history, setHistory] = useState<QuizState[]>([]);
   const [selections, setSelections] = useState<{ answer: string; options: string[] }[]>([]);
   const replayPending = useRef<string | null>(null);
+  const [debugMode, setDebugMode] = useState(false);
 
   useEffect(() => {
     const url = new URL(window.location.href);
     const encoded = url.searchParams.get("p");
     if (encoded) {
       replayPending.current = encoded;
+    }
+    if (url.searchParams.get("debug") === "true") {
+      setDebugMode(true);
     }
 
     Promise.all([
@@ -295,6 +300,7 @@ export default function Quiz() {
           <ResultCard result={state.result} products={products} onRestart={restart} />
         )}
       </div>
+      {debugMode && sheetData && <DebugPanel sheetData={sheetData} />}
     </div>
   );
 }
