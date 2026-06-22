@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { CATEGORIES, EXTERIOR_CATEGORIES } from "@/lib/sheets";
+import { EXTERIOR_CATEGORIES } from "@/lib/sheets";
 import { getNextStep } from "@/lib/quiz-engine";
 import { SheetRow } from "@/lib/types";
+import { Selection, encodeSelections } from "@/lib/url-codec";
 
 interface QuizPage {
   label: string;
@@ -12,30 +13,26 @@ interface QuizPage {
   group: string;
 }
 
-function shortPrefix(selected: string, options: string[]): string {
-  const sel = selected.toLowerCase();
-  const others = options.filter((o) => o !== selected).map((o) => o.toLowerCase());
-  for (let len = 1; len <= sel.length; len++) {
-    const prefix = sel.slice(0, len);
-    const ambiguous = others.some((o) => o.startsWith(prefix));
-    if (!ambiguous) return prefix;
-  }
-  return sel;
-}
-
 function generateUniquePages(sheetData: Record<string, SheetRow[]>): QuizPage[] {
   const seen = new Set<string>();
   const pages: QuizPage[] = [];
 
-  // Fixed pages: top-level and sub-category selection
+  // Fixed pages: top-level and sub-category selection. Derive the exterior URL from
+  // the shared codec rather than a hardcoded token so it can't drift if the
+  // top-level option text ever changes.
+  const topLevelOptions = ["Interior Project", "Exterior Project"];
   pages.push({ label: "Interior or Exterior?", url: "/", type: "question", group: "Top Level" });
-  pages.push({ label: "What type of exterior project?", url: "/?p=e", type: "question", group: "Top Level" });
+  pages.push({
+    label: "What type of exterior project?",
+    url: `/?p=${encodeSelections([{ answer: "Exterior Project", options: topLevelOptions }])}`,
+    type: "question",
+    group: "Top Level",
+  });
 
   function walkCategory(
     categoryKey: string,
-    categoryLabel: string,
     answers: Record<string, string>,
-    selections: { answer: string; options: string[] }[],
+    selections: Selection[],
     group: string
   ) {
     const categoryData = sheetData[categoryKey];
@@ -52,7 +49,7 @@ function generateUniquePages(sheetData: Record<string, SheetRow[]>): QuizPage[] 
         if (seen.has("result:" + products)) return;
         seen.add("result:" + products);
 
-        const encoded = selections.map((s) => shortPrefix(s.answer, s.options)).join("-");
+        const encoded = encodeSelections(selections);
         pages.push({
           label: "Result: " + step.result.mainProducts.join(", "),
           url: `/?p=${encoded}`,
@@ -66,7 +63,7 @@ function generateUniquePages(sheetData: Record<string, SheetRow[]>): QuizPage[] 
       const pageKey = step.questionText + "|" + step.options.sort().join("|");
       if (!seen.has(pageKey)) {
         seen.add(pageKey);
-        const encoded = selections.map((s) => shortPrefix(s.answer, s.options)).join("-");
+        const encoded = encodeSelections(selections);
         pages.push({
           label: step.questionText + " (" + step.options.length + " options)",
           url: `/?p=${encoded}`,
@@ -78,7 +75,7 @@ function generateUniquePages(sheetData: Record<string, SheetRow[]>): QuizPage[] 
       for (const option of step.options) {
         const newAnswers = { ...answers, [step.questionText]: option };
         const newSelections = [...selections, { answer: option, options: step.options }];
-        walkCategory(categoryKey, categoryLabel, newAnswers, newSelections, group);
+        walkCategory(categoryKey, newAnswers, newSelections, group);
       }
     } catch {
       // skip errors
@@ -86,18 +83,18 @@ function generateUniquePages(sheetData: Record<string, SheetRow[]>): QuizPage[] 
   }
 
   // Interior
-  const interiorOptions = ["Interior Project", "Exterior Project"];
-  const interiorSel = [{ answer: "Interior Project", options: interiorOptions }];
-  walkCategory("interior", "Interior", {}, interiorSel, "Interior");
+  const interiorSel: Selection[] = [{ answer: "Interior Project", options: topLevelOptions }];
+  walkCategory("interior", {}, interiorSel, "Interior");
 
   // Exterior categories
   for (const cat of EXTERIOR_CATEGORIES) {
     const extCatOptions = EXTERIOR_CATEGORIES.map((c) => c.label);
-    const extSelections = [
-      { answer: "Exterior Project", options: interiorOptions },
-      { answer: cat.label, options: extCatOptions },
+    const extSelections: Selection[] = [
+      { answer: "Exterior Project", options: topLevelOptions },
+      // Encode the category step with its stable slug, matching the live quiz.
+      { answer: cat.label, options: extCatOptions, code: cat.slug },
     ];
-    walkCategory(cat.key, cat.label, {}, extSelections, "Exterior > " + cat.label);
+    walkCategory(cat.key, {}, extSelections, "Exterior > " + cat.label);
   }
 
   return pages;

@@ -1,45 +1,23 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { fetchAllSheets, CATEGORIES, EXTERIOR_CATEGORIES } from "@/lib/sheets";
-import { getNextStep } from "@/lib/quiz-engine";
+import { fetchAllSheets, EXTERIOR_CATEGORIES } from "@/lib/sheets";
+import { getNextStep, getCategory } from "@/lib/quiz-engine";
 import { SheetRow, QuizState, ProductInfo } from "@/lib/types";
+import { Selection, matchPrefix, encodeSelections, resolveExteriorToken } from "@/lib/url-codec";
 import QuizHeader from "./QuizHeader";
 import QuestionCard from "./QuestionCard";
 import ResultCard from "./ResultCard";
 import DebugPanel from "./DebugPanel";
 
-// Find the shortest prefix of `selected` that uniquely identifies it among `options`
-function shortPrefix(selected: string, options: string[]): string {
-  const sel = selected.toLowerCase();
-  const others = options.filter((o) => o !== selected).map((o) => o.toLowerCase());
-
-  for (let len = 1; len <= sel.length; len++) {
-    const prefix = sel.slice(0, len);
-    const ambiguous = others.some((o) => o.startsWith(prefix));
-    if (!ambiguous) return prefix;
-  }
-  return sel;
+// Display-only title for a question, applying any per-category override (e.g. a
+// blank sheet header). Never used as the answer-matching key.
+function questionTitle(categoryKey: string, questionText: string): string {
+  const cat = getCategory(categoryKey);
+  return cat?.questionLabels?.[questionText] ?? questionText;
 }
 
-// Match a prefix against options, returning the matching option
-function matchPrefix(prefix: string, options: string[]): string | null {
-  const p = prefix.toLowerCase();
-  const matches = options.filter((o) => o.toLowerCase().startsWith(p));
-  if (matches.length === 1) return matches[0];
-  // Exact match fallback
-  const exact = options.find((o) => o.toLowerCase() === p);
-  if (exact) return exact;
-  return matches[0] || null;
-}
-
-function encodeSelections(selections: { answer: string; options: string[] }[]): string {
-  return selections
-    .map((s) => shortPrefix(s.answer, s.options))
-    .join("-");
-}
-
-function updateURL(selections: { answer: string; options: string[] }[]) {
+function updateURL(selections: Selection[]) {
   const url = new URL(window.location.href);
   if (selections.length === 0) {
     url.searchParams.delete("p");
@@ -56,7 +34,7 @@ export default function Quiz() {
   const [error, setError] = useState<string | null>(null);
   const [state, setState] = useState<QuizState>({ phase: "top-level" });
   const [history, setHistory] = useState<QuizState[]>([]);
-  const [selections, setSelections] = useState<{ answer: string; options: string[] }[]>([]);
+  const [selections, setSelections] = useState<Selection[]>([]);
   const replayPending = useRef<string | null>(null);
   const [debugMode, setDebugMode] = useState(false);
 
@@ -102,45 +80,54 @@ export default function Quiz() {
 
     let currentState: QuizState = { phase: "top-level" };
     const currentHistory: QuizState[] = [];
-    const currentSelections: { answer: string; options: string[] }[] = [];
+    const currentSelections: Selection[] = [];
 
-    for (const prefix of prefixes) {
-      if (currentState.phase === "top-level") {
-        const options = ["Interior Project", "Exterior Project"];
-        const selection = matchPrefix(prefix, options);
-        if (!selection) break;
-        currentSelections.push({ answer: selection, options });
-        currentHistory.push(currentState);
-        if (selection === "Interior Project") {
-          currentState = { phase: "questions", categoryKey: "interior", answers: {}, currentQuestionIndex: 0 };
-        } else {
-          currentState = { phase: "sub-category" };
-        }
-      } else if (currentState.phase === "sub-category") {
-        const options = EXTERIOR_CATEGORIES.map((c) => c.label);
-        const selection = matchPrefix(prefix, options);
-        if (!selection) break;
-        const cat = EXTERIOR_CATEGORIES.find((c) => c.label === selection);
-        if (!cat) break;
-        currentSelections.push({ answer: selection, options });
-        currentHistory.push(currentState);
-        currentState = { phase: "questions", categoryKey: cat.key, answers: {}, currentQuestionIndex: 0 };
-      } else if (currentState.phase === "questions") {
-        const categoryData = sheetData[currentState.categoryKey];
-        const step = getNextStep(currentState.categoryKey, categoryData, currentState.answers);
-        if (step.type !== "question") break;
-        const selection = matchPrefix(prefix, step.options);
-        if (!selection) break;
-        currentSelections.push({ answer: selection, options: step.options });
-        const newAnswers: Record<string, string> = { ...currentState.answers, [step.questionText]: selection };
-        currentHistory.push(currentState);
-        const nextStep = getNextStep(currentState.categoryKey, categoryData, newAnswers);
-        if (nextStep.type === "result") {
-          currentState = { phase: "result", result: nextStep.result };
-        } else {
-          currentState = { phase: "questions", categoryKey: currentState.categoryKey, answers: newAnswers, currentQuestionIndex: currentState.currentQuestionIndex + 1 };
+    // Replay is wrapped in try/catch so a malformed or now-incompatible link (e.g.
+    // an old deep-link into a tab whose sheet content has since changed) can never
+    // throw to the error screen. On any failure we simply stop at the last
+    // consistent state, which is always a valid screen the user can continue from.
+    try {
+      for (const prefix of prefixes) {
+        if (currentState.phase === "top-level") {
+          const options = ["Interior Project", "Exterior Project"];
+          const selection = matchPrefix(prefix, options);
+          if (!selection) break;
+          currentSelections.push({ answer: selection, options });
+          currentHistory.push(currentState);
+          if (selection === "Interior Project") {
+            currentState = { phase: "questions", categoryKey: "interior", answers: {}, currentQuestionIndex: 0 };
+          } else {
+            currentState = { phase: "sub-category" };
+          }
+        } else if (currentState.phase === "sub-category") {
+          const options = EXTERIOR_CATEGORIES.map((c) => c.label);
+          // Resolve via stable slug (new links) or the frozen legacy 1-char codes
+          // (old links). Re-encode as the slug so visiting an old link upgrades the
+          // URL to the new canonical form.
+          const cat = resolveExteriorToken(prefix);
+          if (!cat) break;
+          currentSelections.push({ answer: cat.label, options, code: cat.slug });
+          currentHistory.push(currentState);
+          currentState = { phase: "questions", categoryKey: cat.key, answers: {}, currentQuestionIndex: 0 };
+        } else if (currentState.phase === "questions") {
+          const categoryData = sheetData[currentState.categoryKey];
+          const step = getNextStep(currentState.categoryKey, categoryData, currentState.answers);
+          if (step.type !== "question") break;
+          const selection = matchPrefix(prefix, step.options);
+          if (!selection) break;
+          currentSelections.push({ answer: selection, options: step.options });
+          const newAnswers: Record<string, string> = { ...currentState.answers, [step.questionText]: selection };
+          currentHistory.push(currentState);
+          const nextStep = getNextStep(currentState.categoryKey, categoryData, newAnswers);
+          if (nextStep.type === "result") {
+            currentState = { phase: "result", result: nextStep.result };
+          } else {
+            currentState = { phase: "questions", categoryKey: currentState.categoryKey, answers: newAnswers, currentQuestionIndex: currentState.currentQuestionIndex + 1 };
+          }
         }
       }
+    } catch {
+      // Incompatible link — keep whatever consistent state we reached above.
     }
 
     setState(currentState);
@@ -159,8 +146,8 @@ export default function Quiz() {
   const historyRef = useRef(history);
   historyRef.current = history;
 
-  const addSelection = useCallback((answer: string, options: string[]) => {
-    setSelections((prev) => [...prev, { answer, options }]);
+  const addSelection = useCallback((answer: string, options: string[], code?: string) => {
+    setSelections((prev) => [...prev, { answer, options, code }]);
   }, []);
 
   const goBack = useCallback(() => {
@@ -190,7 +177,9 @@ export default function Quiz() {
 
   const handleSubCategory = useCallback((categoryKey: string, label: string) => {
     const options = EXTERIOR_CATEGORIES.map((c) => c.label);
-    addSelection(label, options);
+    const cat = EXTERIOR_CATEGORIES.find((c) => c.key === categoryKey);
+    // Encode the category step with its stable slug, never the (mutable) label.
+    addSelection(label, options, cat?.slug);
     setHistory((h) => [...h, stateRef.current]);
     setState({ phase: "questions", categoryKey, answers: {}, currentQuestionIndex: 0 });
   }, [addSelection]);
@@ -288,7 +277,7 @@ export default function Quiz() {
           }
           return (
             <QuestionCard
-              question={step.questionText}
+              question={questionTitle(state.categoryKey, step.questionText)}
               options={step.options}
               variant={step.options.length > 3 ? "grid" : "buttons"}
               onSelect={(answer) => handleAnswer(step.questionText, answer, step.options)}

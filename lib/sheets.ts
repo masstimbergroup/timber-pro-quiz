@@ -9,6 +9,7 @@ export const CATEGORIES: CategoryConfig[] = [
     label: "Interior",
     description: "Projects for interior applications",
     gid: "0",
+    slug: "in",
     questionColumns: [
       "What type of interior project?",
       "Do you want to stain the wood a different color?",
@@ -18,9 +19,10 @@ export const CATEGORIES: CategoryConfig[] = [
   },
   {
     key: "structural",
-    label: "Structural Wood Surfaces",
-    description: "Wood or Log Siding, Mass Timber, Timber Frames",
+    label: "Structural Wood",
+    description: "Wood or log siding, mass timber frames, timber frames, etc.",
     gid: "1623581807",
+    slug: "st",
     questionColumns: [
       "What Type of Wood Species",
       "What type of texture",
@@ -34,9 +36,10 @@ export const CATEGORIES: CategoryConfig[] = [
   },
   {
     key: "outdoor-living",
-    label: "Outdoor Living Spaces",
+    label: "Outdoor Living",
     description: "Decks, fences, outdoor furniture, gazebos, etc.",
     gid: "1043945754",
+    slug: "ol",
     questionColumns: [
       "What Type of Wood Species",
       "What type of texture",
@@ -48,10 +51,11 @@ export const CATEGORIES: CategoryConfig[] = [
     ],
   },
   {
-    key: "concrete-masonry",
-    label: "Concrete & Masonry",
-    description: "Concrete driveways, patios, walkways, walls, pavers, etc.",
+    key: "concrete",
+    label: "Concrete",
+    description: "Patios, walkways, pavers, driveways, retaining walls, foundations, etc.",
     gid: "257663984",
+    slug: "co",
     questionColumns: [
       "What Type of Project?",
       "What's the current condition?",
@@ -60,10 +64,11 @@ export const CATEGORIES: CategoryConfig[] = [
     ],
   },
   {
-    key: "wood-restoration",
-    label: "Wood Restoration",
-    description: "Restore and maintain exterior wood projects",
+    key: "restoration",
+    label: "Restoration",
+    description: "Weathered, faded, greyed, or previously stained wood that needs reviving, etc.",
     gid: "89613080",
+    slug: "rs",
     questionColumns: [
       "What Type of Project?",
       "What's the current condition?",
@@ -73,10 +78,18 @@ export const CATEGORIES: CategoryConfig[] = [
     ],
   },
   {
-    key: "fencing",
-    label: "Fencing",
-    description: "Fences and fence posts",
+    key: "docks-bridges",
+    label: "Docks & Bridges",
+    description: "Docks, piers, boardwalks, pilings, wood bridges, waterfront structures, etc.",
     gid: "1334082439",
+    slug: "db",
+    // The sheet's first question column for this tab has a blank header, so its
+    // raw key is "". We keep "" as the answer-matching key (do not change it), and
+    // only override the DISPLAYED title here so it doesn't fall back to the generic
+    // "What's your main goal?" placeholder.
+    questionLabels: {
+      "": "What's your goal for the wood's color?",
+    },
     questionColumns: [
       "",
       "Does your project require fire-retardant capabilities?",
@@ -84,10 +97,11 @@ export const CATEGORIES: CategoryConfig[] = [
     ],
   },
   {
-    key: "roofing",
-    label: "Roofing / Shakes",
-    description: "Cedar shakes, shingles, and roofing",
+    key: "non-toxic",
+    label: "Non-Toxic",
+    description: "Garden beds, raised planters, chicken coops, beehives, animal enclosures, play structures, etc.",
     gid: "818762569",
+    slug: "nx",
     questionColumns: [
       "What needs protection?",
       "Does your project require fire-retardant capabilities?",
