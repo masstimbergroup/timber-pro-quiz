@@ -3,6 +3,13 @@ import { SheetRow, CategoryConfig } from "./types";
 
 const SHEET_ID = "1lASWEOmfA7OXc1W34qSauQfzzlIbbDqhpg2oMhOesq8";
 
+// How long (seconds) the server caches each sheet tab before re-fetching from
+// Google. Google forbids client caching (`cache-control: no-store`), so caching it
+// server-side via Next's Data Cache is what keeps the quiz fast. A sheet edit goes
+// live within this window. Consumed by fetchAllSheets and mirrored by the
+// `revalidate` export in app/api/quiz-data/route.ts.
+export const SHEET_REVALIDATE_SECONDS = 60;
+
 export const CATEGORIES: CategoryConfig[] = [
   {
     key: "interior",
@@ -182,7 +189,10 @@ export async function fetchAllSheets(): Promise<Record<string, SheetRow[]>> {
   await Promise.all(
     CATEGORIES.map(async (cat) => {
       const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${cat.gid}`;
-      const res = await fetch(url);
+      // Cache each tab in Next's server-side Data Cache for SHEET_REVALIDATE_SECONDS.
+      // (No-op in the browser, but fetchAllSheets now only runs server-side via the
+      // /api/quiz-data route handler.)
+      const res = await fetch(url, { next: { revalidate: SHEET_REVALIDATE_SECONDS } });
       if (!res.ok) throw new Error(`Failed to fetch sheet ${cat.key}: ${res.status}`);
       const csv = await res.text();
       results[cat.key] = csvToSheetRows(csv);

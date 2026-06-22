@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { fetchAllSheets, EXTERIOR_CATEGORIES } from "@/lib/sheets";
+import { EXTERIOR_CATEGORIES } from "@/lib/sheets";
 import { getNextStep, getCategory } from "@/lib/quiz-engine";
 import { SheetRow, QuizState, ProductInfo } from "@/lib/types";
 import { Selection, matchPrefix, encodeSelections, resolveExteriorToken } from "@/lib/url-codec";
@@ -49,7 +49,12 @@ export default function Quiz() {
     }
 
     Promise.all([
-      fetchAllSheets(),
+      // One fast, same-origin request to our server-cached route instead of 7 slow,
+      // uncacheable requests straight to Google. See app/api/quiz-data/route.ts.
+      fetch("/api/quiz-data").then((r) => {
+        if (!r.ok) throw new Error(`Failed to load quiz data: ${r.status}`);
+        return r.json();
+      }),
       fetch("/products.json").then((r) => r.ok ? r.json() : []),
     ])
       .then(([sheets, productList]) => {
