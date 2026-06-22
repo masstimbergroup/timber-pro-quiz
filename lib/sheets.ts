@@ -164,7 +164,13 @@ function csvToSheetRows(csv: string): SheetRow[] {
 
   const mainIdx = headers.findIndex((h) => h.toLowerCase().includes("main product"));
   const preIdx = headers.findIndex((h) => h.toLowerCase().includes("pre-treatment"));
-  const postIdx = headers.findIndex((h) => h.toLowerCase().includes("post-treatment"));
+  // Match both "Post-treatment" and the sheet's actual "Post Treatment" header (space,
+  // no hyphen). Without the space variant, postIdx is always -1 and post-treatment
+  // product recommendations never render.
+  const postIdx = headers.findIndex((h) => {
+    const l = h.toLowerCase();
+    return l.includes("post-treatment") || l.includes("post treatment");
+  });
 
   const resultStartIndex = mainIdx !== -1 ? mainIdx : headers.length - 3;
   const questionHeaders = headers.slice(0, resultStartIndex);
