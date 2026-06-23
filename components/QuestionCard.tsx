@@ -10,7 +10,6 @@ interface QuestionCardProps {
   options: string[];
   onSelect: (answer: string) => void;
   variant?: "image-cards" | "buttons" | "grid";
-  descriptions?: Record<string, string>;
 }
 
 function capitalizeFirst(str: string): string {
@@ -18,7 +17,7 @@ function capitalizeFirst(str: string): string {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-export default function QuestionCard({ question, options, onSelect, variant = "buttons", descriptions }: QuestionCardProps) {
+export default function QuestionCard({ question, options, onSelect, variant = "buttons" }: QuestionCardProps) {
   return (
     <div className="w-full max-w-3xl mx-auto">
       <style>{`
@@ -109,11 +108,6 @@ export default function QuestionCard({ question, options, onSelect, variant = "b
               }}
             >
               <span className="text-lg font-semibold block">{capitalizeFirst(option)}</span>
-              {descriptions?.[option] && (
-                <span className="text-sm mt-1 block" style={{ color: "var(--color-text-muted)" }}>
-                  {descriptions[option]}
-                </span>
-              )}
             </button>
           ))}
         </div>

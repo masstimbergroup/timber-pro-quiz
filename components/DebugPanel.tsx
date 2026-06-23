@@ -1,9 +1,8 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { EXTERIOR_CATEGORIES } from "@/lib/sheets";
 import { getNextStep } from "@/lib/quiz-engine";
-import { SheetRow } from "@/lib/types";
+import { SheetRow, CategoryConfig } from "@/lib/types";
 import { Selection, encodeSelections } from "@/lib/url-codec";
 
 interface QuizPage {
@@ -13,7 +12,10 @@ interface QuizPage {
   group: string;
 }
 
-function generateUniquePages(sheetData: Record<string, SheetRow[]>): QuizPage[] {
+function generateUniquePages(
+  categories: CategoryConfig[],
+  sheets: Record<string, SheetRow[]>
+): QuizPage[] {
   const seen = new Set<string>();
   const pages: QuizPage[] = [];
 
@@ -30,16 +32,16 @@ function generateUniquePages(sheetData: Record<string, SheetRow[]>): QuizPage[] 
   });
 
   function walkCategory(
-    categoryKey: string,
+    category: CategoryConfig,
     answers: Record<string, string>,
     selections: Selection[],
     group: string
   ) {
-    const categoryData = sheetData[categoryKey];
+    const categoryData = sheets[category.gid];
     if (!categoryData) return;
 
     try {
-      const step = getNextStep(categoryKey, categoryData, { ...answers });
+      const step = getNextStep(category, categoryData, { ...answers });
 
       if (step.type === "result") {
         // Deduplicate results by their product combination
@@ -75,36 +77,42 @@ function generateUniquePages(sheetData: Record<string, SheetRow[]>): QuizPage[] 
       for (const option of step.options) {
         const newAnswers = { ...answers, [step.questionText]: option };
         const newSelections = [...selections, { answer: option, options: step.options }];
-        walkCategory(categoryKey, newAnswers, newSelections, group);
+        walkCategory(category, newAnswers, newSelections, group);
       }
     } catch {
       // skip errors
     }
   }
 
+  const exteriorCategories = categories.filter((c) => c.section === "exterior");
+
   // Interior
-  const interiorSel: Selection[] = [{ answer: "Interior Project", options: topLevelOptions }];
-  walkCategory("interior", {}, interiorSel, "Interior");
+  const interiorCategory = categories.find((c) => c.section === "interior");
+  if (interiorCategory) {
+    const interiorSel: Selection[] = [{ answer: "Interior Project", options: topLevelOptions }];
+    walkCategory(interiorCategory, {}, interiorSel, "Interior");
+  }
 
   // Exterior categories
-  for (const cat of EXTERIOR_CATEGORIES) {
-    const extCatOptions = EXTERIOR_CATEGORIES.map((c) => c.label);
+  for (const cat of exteriorCategories) {
+    const extCatOptions = exteriorCategories.map((c) => c.label);
     const extSelections: Selection[] = [
       { answer: "Exterior Project", options: topLevelOptions },
       // Encode the category step with its stable slug, matching the live quiz.
       { answer: cat.label, options: extCatOptions, code: cat.slug },
     ];
-    walkCategory(cat.key, {}, extSelections, "Exterior > " + cat.label);
+    walkCategory(cat, {}, extSelections, "Exterior > " + cat.label);
   }
 
   return pages;
 }
 
 interface DebugPanelProps {
-  sheetData: Record<string, SheetRow[]>;
+  categories: CategoryConfig[];
+  sheets: Record<string, SheetRow[]>;
 }
 
-export default function DebugPanel({ sheetData }: DebugPanelProps) {
+export default function DebugPanel({ categories, sheets }: DebugPanelProps) {
   const [checked, setChecked] = useState<Set<string>>(() => {
     if (typeof window === "undefined") return new Set();
     try {
@@ -118,7 +126,7 @@ export default function DebugPanel({ sheetData }: DebugPanelProps) {
   const [filter, setFilter] = useState("");
   const [hideChecked, setHideChecked] = useState(true);
 
-  const pages = useMemo(() => generateUniquePages(sheetData), [sheetData]);
+  const pages = useMemo(() => generateUniquePages(categories, sheets), [categories, sheets]);
 
   useEffect(() => {
     localStorage.setItem("debug-checked", JSON.stringify([...checked]));

@@ -1,4 +1,4 @@
-import { fetchAllSheets, SHEET_REVALIDATE_SECONDS } from "@/lib/sheets";
+import { fetchQuizData, SHEET_REVALIDATE_SECONDS } from "@/lib/sheets";
 
 // Server-side fetch of all quiz sheet tabs, served from cache.
 //
@@ -20,7 +20,7 @@ import { fetchAllSheets, SHEET_REVALIDATE_SECONDS } from "@/lib/sheets";
 // Sheet edits go live within ~SHEET_REVALIDATE_SECONDS.
 export async function GET() {
   try {
-    const data = await fetchAllSheets();
+    const data = await fetchQuizData();
     return Response.json(data, {
       headers: {
         "Cache-Control": `public, s-maxage=${SHEET_REVALIDATE_SECONDS}, stale-while-revalidate=300`,

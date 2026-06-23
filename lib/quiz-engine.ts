@@ -1,6 +1,5 @@
 // lib/quiz-engine.ts
-import { SheetRow, QuizResult } from "./types";
-import { CATEGORIES } from "./sheets";
+import { SheetRow, CategoryConfig, QuizResult } from "./types";
 
 const SKIP_VALUES = ["(SKIP)", "(Skip)", "(skip)"];
 
@@ -23,19 +22,16 @@ function splitOptions(val: string): string[] {
   return parts.filter(Boolean);
 }
 
-export function getCategory(key: string) {
-  return CATEGORIES.find((c) => c.key === key);
+export function getCategory(categories: CategoryConfig[], key: string) {
+  return categories.find((c) => c.key === key);
 }
 
 export function getNextStep(
-  categoryKey: string,
-  sheetData: SheetRow[],
+  category: CategoryConfig,
+  rows: SheetRow[],
   answers: Record<string, string>
 ): { type: "question"; questionText: string; options: string[] } | { type: "result"; result: QuizResult } {
-  const category = getCategory(categoryKey);
-  if (!category) throw new Error(`Unknown category: ${categoryKey}`);
-
-  let matchingRows = sheetData;
+  let matchingRows = rows;
   for (const [question, answer] of Object.entries(answers)) {
     matchingRows = matchingRows.filter((row) => {
       const cellValue = row.questions[question] || "";
@@ -77,7 +73,6 @@ export function getNextStep(
       // Re-filter matching rows with the auto-selected answer
       matchingRows = matchingRows.filter((row) => {
         const cellValue = row.questions[questionCol] || "";
-        // Match if the cell contains the auto-selected value (could be part of comma-separated)
         return cellValue === "ANY" || splitOptions(cellValue).includes(options[0]);
       });
       continue;

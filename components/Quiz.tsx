@@ -1,20 +1,20 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { EXTERIOR_CATEGORIES } from "@/lib/sheets";
 import { getNextStep, getCategory } from "@/lib/quiz-engine";
-import { SheetRow, QuizState, ProductInfo } from "@/lib/types";
+import { SheetRow, CategoryConfig, QuizState, ProductInfo } from "@/lib/types";
 import { Selection, matchPrefix, encodeSelections, resolveExteriorToken } from "@/lib/url-codec";
 import QuizHeader from "./QuizHeader";
 import QuestionCard from "./QuestionCard";
 import ResultCard from "./ResultCard";
 import DebugPanel from "./DebugPanel";
 
-// Display-only title for a question, applying any per-category override (e.g. a
-// blank sheet header). Never used as the answer-matching key.
-function questionTitle(categoryKey: string, questionText: string): string {
-  const cat = getCategory(categoryKey);
-  return cat?.questionLabels?.[questionText] ?? questionText;
+const TOP_LEVEL_OPTIONS = ["Interior Project", "Exterior Project"];
+
+// Display-only title for a question, applying any per-category override (e.g. a blank
+// sheet header). Never used as the answer-matching key.
+function questionTitle(category: CategoryConfig | undefined, questionText: string): string {
+  return category?.questionLabels?.[questionText] ?? questionText;
 }
 
 function updateURL(selections: Selection[]) {
@@ -28,7 +28,8 @@ function updateURL(selections: Selection[]) {
 }
 
 export default function Quiz() {
-  const [sheetData, setSheetData] = useState<Record<string, SheetRow[]> | null>(null);
+  const [categories, setCategories] = useState<CategoryConfig[] | null>(null);
+  const [sheets, setSheets] = useState<Record<string, SheetRow[]> | null>(null);
   const [products, setProducts] = useState<Record<string, ProductInfo>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -49,16 +50,18 @@ export default function Quiz() {
     }
 
     Promise.all([
-      // One fast, same-origin request to our server-cached route instead of 7 slow,
-      // uncacheable requests straight to Google. See app/api/quiz-data/route.ts.
+      // One fast, same-origin request to our server-cached route. It returns the
+      // dynamically-built category list (titles from the sheet tabs) plus each
+      // category's rows. See app/api/quiz-data/route.ts.
       fetch("/api/quiz-data").then((r) => {
         if (!r.ok) throw new Error(`Failed to load quiz data: ${r.status}`);
         return r.json();
       }),
       fetch("/products.json").then((r) => r.ok ? r.json() : []),
     ])
-      .then(([sheets, productList]) => {
-        setSheetData(sheets);
+      .then(([quizData, productList]) => {
+        setCategories(quizData.categories);
+        setSheets(quizData.sheets);
         const productMap: Record<string, ProductInfo> = {};
         for (const p of productList) {
           productMap[p.sheetName] = p;
@@ -79,7 +82,9 @@ export default function Quiz() {
 
   // Replay selections from URL after data loads
   useEffect(() => {
-    if (!sheetData || !replayPending.current) return;
+    if (!sheets || !categories || !replayPending.current) return;
+    const exteriorCategories = categories.filter((c) => c.section === "exterior");
+    const interiorCategory = categories.find((c) => c.section === "interior");
     const prefixes = replayPending.current.split("-");
     replayPending.current = null;
 
@@ -87,43 +92,45 @@ export default function Quiz() {
     const currentHistory: QuizState[] = [];
     const currentSelections: Selection[] = [];
 
-    // Replay is wrapped in try/catch so a malformed or now-incompatible link (e.g.
-    // an old deep-link into a tab whose sheet content has since changed) can never
-    // throw to the error screen. On any failure we simply stop at the last
-    // consistent state, which is always a valid screen the user can continue from.
+    // Replay is wrapped in try/catch so a malformed or now-incompatible link (e.g. an
+    // old deep-link into a tab whose sheet content has since changed) can never throw
+    // to the error screen. On any failure we simply stop at the last consistent state,
+    // which is always a valid screen the user can continue from.
     try {
       for (const prefix of prefixes) {
         if (currentState.phase === "top-level") {
-          const options = ["Interior Project", "Exterior Project"];
-          const selection = matchPrefix(prefix, options);
+          const selection = matchPrefix(prefix, TOP_LEVEL_OPTIONS);
           if (!selection) break;
-          currentSelections.push({ answer: selection, options });
+          currentSelections.push({ answer: selection, options: TOP_LEVEL_OPTIONS });
           currentHistory.push(currentState);
           if (selection === "Interior Project") {
-            currentState = { phase: "questions", categoryKey: "interior", answers: {}, currentQuestionIndex: 0 };
+            if (!interiorCategory) break;
+            currentState = { phase: "questions", categoryKey: interiorCategory.key, answers: {}, currentQuestionIndex: 0 };
           } else {
             currentState = { phase: "sub-category" };
           }
         } else if (currentState.phase === "sub-category") {
-          const options = EXTERIOR_CATEGORIES.map((c) => c.label);
-          // Resolve via stable slug (new links) or the frozen legacy 1-char codes
-          // (old links). Re-encode as the slug so visiting an old link upgrades the
-          // URL to the new canonical form.
-          const cat = resolveExteriorToken(prefix);
+          const options = exteriorCategories.map((c) => c.label);
+          // Resolve via stable slug (new links) or the frozen legacy 1-char codes (old
+          // links). Re-encode as the slug so visiting an old link upgrades the URL to
+          // the new canonical form.
+          const cat = resolveExteriorToken(prefix, exteriorCategories);
           if (!cat) break;
           currentSelections.push({ answer: cat.label, options, code: cat.slug });
           currentHistory.push(currentState);
           currentState = { phase: "questions", categoryKey: cat.key, answers: {}, currentQuestionIndex: 0 };
         } else if (currentState.phase === "questions") {
-          const categoryData = sheetData[currentState.categoryKey];
-          const step = getNextStep(currentState.categoryKey, categoryData, currentState.answers);
+          const category = getCategory(categories, currentState.categoryKey);
+          const rows = sheets[currentState.categoryKey];
+          if (!category || !rows) break;
+          const step = getNextStep(category, rows, currentState.answers);
           if (step.type !== "question") break;
           const selection = matchPrefix(prefix, step.options);
           if (!selection) break;
           currentSelections.push({ answer: selection, options: step.options });
           const newAnswers: Record<string, string> = { ...currentState.answers, [step.questionText]: selection };
           currentHistory.push(currentState);
-          const nextStep = getNextStep(currentState.categoryKey, categoryData, newAnswers);
+          const nextStep = getNextStep(category, rows, newAnswers);
           if (nextStep.type === "result") {
             currentState = { phase: "result", result: nextStep.result };
           } else {
@@ -138,7 +145,7 @@ export default function Quiz() {
     setState(currentState);
     setHistory(currentHistory);
     setSelections(currentSelections);
-  }, [sheetData]);
+  }, [sheets, categories]);
 
   // Sync URL whenever selections change
   useEffect(() => {
@@ -170,40 +177,44 @@ export default function Quiz() {
   }, []);
 
   const handleTopLevel = useCallback((answer: string) => {
-    const options = ["Interior Project", "Exterior Project"];
-    addSelection(answer, options);
+    const interiorCategory = categories?.find((c) => c.section === "interior");
+    // If the interior tab is somehow absent, the Interior button is a no-op — bail
+    // BEFORE mutating selections/history so the user isn't stranded mid-state.
+    if (answer === "Interior Project" && !interiorCategory) return;
+    addSelection(answer, TOP_LEVEL_OPTIONS);
     setHistory((h) => [...h, stateRef.current]);
     if (answer === "Interior Project") {
-      setState({ phase: "questions", categoryKey: "interior", answers: {}, currentQuestionIndex: 0 });
+      setState({ phase: "questions", categoryKey: interiorCategory!.key, answers: {}, currentQuestionIndex: 0 });
     } else {
       setState({ phase: "sub-category" });
     }
-  }, [addSelection]);
+  }, [addSelection, categories]);
 
-  const handleSubCategory = useCallback((categoryKey: string, label: string) => {
-    const options = EXTERIOR_CATEGORIES.map((c) => c.label);
-    const cat = EXTERIOR_CATEGORIES.find((c) => c.key === categoryKey);
+  const handleSubCategory = useCallback((cat: CategoryConfig) => {
+    const options = (categories?.filter((c) => c.section === "exterior") ?? []).map((c) => c.label);
     // Encode the category step with its stable slug, never the (mutable) label.
-    addSelection(label, options, cat?.slug);
+    addSelection(cat.label, options, cat.slug);
     setHistory((h) => [...h, stateRef.current]);
-    setState({ phase: "questions", categoryKey, answers: {}, currentQuestionIndex: 0 });
-  }, [addSelection]);
+    setState({ phase: "questions", categoryKey: cat.key, answers: {}, currentQuestionIndex: 0 });
+  }, [addSelection, categories]);
 
   const handleAnswer = useCallback((question: string, answer: string, options: string[]) => {
-    if (!sheetData) return;
+    if (!sheets || !categories) return;
     addSelection(answer, options);
     const prev = stateRef.current;
     if (prev.phase !== "questions") return;
+    const category = getCategory(categories, prev.categoryKey);
+    const rows = sheets[prev.categoryKey];
+    if (!category || !rows) return;
     const newAnswers = { ...prev.answers, [question]: answer };
-    const categoryData = sheetData[prev.categoryKey];
-    const nextStep = getNextStep(prev.categoryKey, categoryData, newAnswers);
+    const nextStep = getNextStep(category, rows, newAnswers);
     setHistory((h) => [...h, prev]);
     if (nextStep.type === "result") {
       setState({ phase: "result" as const, result: nextStep.result });
     } else {
       setState({ ...prev, answers: newAnswers, currentQuestionIndex: prev.currentQuestionIndex + 1 });
     }
-  }, [sheetData, addSelection]);
+  }, [sheets, categories, addSelection]);
 
   if (loading) {
     return (
@@ -222,21 +233,18 @@ export default function Quiz() {
     );
   }
 
-  if (error) {
+  if (error || !categories || !sheets || categories.length === 0) {
     return (
       <div className="w-full">
         <QuizHeader />
         <div className="flex items-center justify-center min-h-[60vh]">
-          <p className="text-red-600">Failed to load quiz: {error}</p>
+          <p className="text-red-600">Failed to load quiz{error ? `: ${error}` : ""}</p>
         </div>
       </div>
     );
   }
 
-  const extDescriptions: Record<string, string> = {};
-  for (const cat of EXTERIOR_CATEGORIES) {
-    extDescriptions[cat.label] = cat.description;
-  }
+  const exteriorCategories = categories.filter((c) => c.section === "exterior");
 
   return (
     <div className="w-full min-h-screen flex flex-col relative">
@@ -255,7 +263,7 @@ export default function Quiz() {
         {state.phase === "top-level" && (
           <QuestionCard
             question="What type of project are you working on?"
-            options={["Interior Project", "Exterior Project"]}
+            options={TOP_LEVEL_OPTIONS}
             variant="image-cards"
             onSelect={handleTopLevel}
           />
@@ -264,25 +272,28 @@ export default function Quiz() {
         {state.phase === "sub-category" && (
           <QuestionCard
             question="What type of exterior project?"
-            options={EXTERIOR_CATEGORIES.map((c) => c.label)}
+            options={exteriorCategories.map((c) => c.label)}
             variant="grid"
-            descriptions={extDescriptions}
             onSelect={(label) => {
-              const cat = EXTERIOR_CATEGORIES.find((c) => c.label === label);
-              if (cat) handleSubCategory(cat.key, label);
+              const cat = exteriorCategories.find((c) => c.label === label);
+              if (cat) handleSubCategory(cat);
             }}
           />
         )}
 
-        {state.phase === "questions" && sheetData && (() => {
-          const categoryData = sheetData[state.categoryKey];
-          const step = getNextStep(state.categoryKey, categoryData, state.answers);
+        {state.phase === "questions" && (() => {
+          const category = getCategory(categories, state.categoryKey);
+          const rows = sheets[state.categoryKey];
+          if (!category || !rows) {
+            return <p className="text-red-600 text-center">This category is unavailable.</p>;
+          }
+          const step = getNextStep(category, rows, state.answers);
           if (step.type === "result") {
             return <ResultCard result={step.result} products={products} onRestart={restart} />;
           }
           return (
             <QuestionCard
-              question={questionTitle(state.categoryKey, step.questionText)}
+              question={questionTitle(category, step.questionText)}
               options={step.options}
               variant={step.options.length > 3 ? "grid" : "buttons"}
               onSelect={(answer) => handleAnswer(step.questionText, answer, step.options)}
@@ -294,7 +305,7 @@ export default function Quiz() {
           <ResultCard result={state.result} products={products} onRestart={restart} />
         )}
       </div>
-      {debugMode && sheetData && <DebugPanel sheetData={sheetData} />}
+      {debugMode && <DebugPanel categories={categories} sheets={sheets} />}
     </div>
   );
 }
